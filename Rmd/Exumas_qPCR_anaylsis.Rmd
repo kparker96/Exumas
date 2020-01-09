@@ -28,24 +28,58 @@ df <- steponeR(files = plates,
                copy.number = list(C = 20, D = 3, A = 1, B = 1),
                ploidy = list(C = 1, D = 1, A = 1, B = 1),
                extract = list(C = 0.813, D = 0.813, A = 0.813, B = 0.813))
-qpcr_step <- df$result
+qpcr_stepone <- df$result
 ```
+
+# Establishing Ratios
+```{r}
+# adjust CT for flouresence 
+qpcr_step_flor <- qpcr_stepone %>%
+  mutate(A.CT.mean = A.CT.mean - 1, 
+         B.CT.mean = B.CT.mean - 1,
+         C.CT.mean = C.CT.mean - 1,
+         D.CT.mean = D.CT.mean - 1)
+
+# adjust CT to form ratio of Symbiont divided by Copy # (Currently a Placeholder #)
+qpcr_copy_num <- qpcr_step_flor %>%
+  mutate(N = 15) %>%
+  mutate(A.N = 2^(N - A.CT.mean)/1,
+         B.N = 2^(N - B.CT.mean)/1,
+         C.N = 2^(N - C.CT.mean)/1,
+         D.N = 2^(N - D.CT.mean)/1)
+
+qpcr_prop <- qpcr_copy_num %>%
+  mutate(A.N = ifelse(is.na(A.N), 0, A.N),
+         B.N = ifelse(is.na(B.N), 0, B.N),
+         C.N = ifelse(is.na(C.N), 0, C.N),
+         D.N = ifelse(is.na(D.N), 0, D.N)) %>%
+  rowwise() %>%
+  mutate(total = sum(A.N + B.N + C.N + D.N))%>%
+  mutate(A.prop = A.N/total, B.prop = B.N/total, C.prop = C.N/total, D.prop = D.N/total)
+
+qpcr_step <- qpcr_prop %>%
+  mutate(dom_sym = case_when(B.prop > C.prop & B.prop > D.prop & B.prop > A.prop ~ "Breviolum",
+                             C.prop > B.prop & C.prop > D.prop & C.prop > A.prop ~ "Cladocopium",
+                             D.prop > B.prop & D.prop > C.prop & D.prop > A.prop ~ "Durusdinium",
+                             A.prop > B.prop & A.prop > C.prop & A.prop > D.prop ~ "Symbiodinium"))
+   
+```
+
 
 # Oranizing Raw qPCR Data
 ```{r}
 # Convert NaN CT values to 0  
 qpcr <- qpcr_step %>%
-  mutate(A.CT.mean = ifelse(is.na(A.CT.mean), 0, A.CT.mean),
+ mutate(A.CT.mean = ifelse(is.na(A.CT.mean), 0, A.CT.mean),
          B.CT.mean = ifelse(is.na(B.CT.mean), 0, B.CT.mean),
          C.CT.mean = ifelse(is.na(C.CT.mean), 0, C.CT.mean),
-         D.CT.mean = ifelse(is.na(D.CT.mean), 0, D.CT.mean)) 
+         D.CT.mean = ifelse(is.na(D.CT.mean), 0, D.CT.mean))
 
 # Samples that did not amplify for any symbionts
 fails <- qpcr %>%
   filter(A.CT.mean == 0 & B.CT.mean == 0 & C.CT.mean == 0 & D.CT.mean == 0,
          Sample.Name != "PTC",
          Sample.Name != "NTC")
-
 
 # Samples that need to be rerun due to 1 technical replicate or SD > 1
 reruns <- qpcr %>%
@@ -73,12 +107,14 @@ exumas_dupes_f1 <- exumas_dupes %>%
   group_by(Sample.Name) %>%
   filter(A.reps != 1, B.reps != 1, C.reps != 1, D.reps != 1) %>%
   ungroup()
-
+  
 # Average SD  
 exumas_dupes_f2 <- exumas_dupes_f1 %>%
+  rowwise() %>%
   mutate(avg_sd = mean(c(A.CT.sd, B.CT.sd, C.CT.sd, D.CT.sd), na.rm = TRUE)) %>%
+  select(Sample.Name, File.Name, A.CT.sd, B.CT.sd, C.CT.sd, D.CT.sd, avg_sd) %>%
   group_by(Sample.Name) %>%
-  filter(avg_sd == avg_sd[which.min(avg_sd)]) 
+  dplyr::filter(avg_sd == min(avg_sd)) 
 
 # Raw Data fine on the first run
 qpcr_good <- qpcr %>%
@@ -92,8 +128,14 @@ exumas_good <- qpcr_good %>%
   filter(!Sample.Name %in% dupes$Sample.Name) %>%
   bind_rows(exumas_dupes_f2)
 
+need_2_clean <- exumas_good %>%
+  group_by(Sample.Name) %>%
+  count(vars = "Sample.Name") %>%
+  filter(n > 1) 
+
+
 # Which Samples Were Duplicated and Still Need to be Rerun?
-setdiff(exumas_dupes$Sample.Name, exumas_dupes_f3$Sample.Name)
+setdiff(exumas_dupes$Sample.Name, exumas_dupes_f2$Sample.Name)
 
 # Samples that need to be rerun
 view(setdiff(reruns$Sample.Name, exumas_dupes_f2$Sample.Name))
@@ -114,24 +156,49 @@ exumas_data <- right_join(sample_data, exumas_good, by = "Sample.Name", all = TR
 
 ```
 
-## I DON'T KNOW IF THIS IS RIGHT, TRIED TO REMAKE RATIO TO N TO USE FOR ANALYSIS 
+
+# Depth 
 ```{r}
-exumas_dom_sym<- exumas_data %>%
-  select(Sample.Name, site, genus, species, depth, A.CT.mean, B.CT.mean, C.CT.mean, D.CT.mean) %>%
-  mutate(N = 83) %>%
-  mutate(A.N = A.CT.mean/N, B.N = B.CT.mean/N, C.N = C.CT.mean/N, D.N = D.CT.mean/N) %>%
-  mutate(dom_sym = case_when(B.N > C.N & B.N > D.N & B.N > A.N ~ "Breviolum",
-                             C.N > B.N & C.N > D.N & C.N > A.N ~ "Cladocopium",
-                             D.N > B.N & D.N > C.N & D.N > A.N ~ "Durusdinium",
-                             A.N > B.N & A.N > C.N & A.N > D.N ~ "Symbiodinium"))
+a <- exumas_data %>%
+  select(site, depth) %>%
+  arrange(depth) %>%
+  filter(site == "blacktip_wall")
+
+
+
+metrics<- a %>%
+  group_by(site) %>%
+  summarize(
+    mean = mean(depth, na.rm = TRUE),
+    min = min(depth, na.rm = TRUE),
+    max = max(depth, na.rm = TRUE),
+    median = median(depth, na.rm = TRUE))
+
+  arrange(metrics, min)
+
+
+
+b <- a %>%
+  mutate(depth_int = cut(depth, breaks = 13.1)) %>%
+  select(site,depth_int) %>%
+  distinct() %>%
+  arrange(depth_int)
+
+
+c <- a %>%
+  filter(depth > 17.500 & depth < 26.500)
 ```
+
+
+
+
 
 
 
 
 ```{r}
 # Visualizing symbiont communites by site and species
-sym_commun_species <- exumas_dom_sym %>%
+sym_commun_site <- exumas_data %>%
   select(Sample.Name, A.N, B.N, C.N, D.N, site, genus, dom_sym) %>%
   mutate(Symbiodinium = case_when(A.N > 0 ~ A.N),
          Breviolum = case_when(B.N > 0 ~ B.N),
@@ -141,7 +208,7 @@ sym_commun_species <- exumas_dom_sym %>%
   gather(key = "sym", value = "value", -Sample.Name, -site, -genus) %>%
   filter(value != "NA")
 
-ggplot(sym_commun_species, aes(x = Sample.Name, y = value, fill = sym)) +
+ggplot(sym_commun_site, aes(x = Sample.Name, y = value, fill = sym)) +
   geom_bar(stat = "identity", position = "fill") +
   xlab("Sample") +
   ylab("Proportion of Symbionts in Coral") +
@@ -157,6 +224,19 @@ ggplot(sym_commun_species, aes(x = Sample.Name, y = value, fill = sym)) +
         panel.border = element_rect(color = "black", fill = NA, size = 1.5),
         legend.text = element_text(size = 25, face = "italic"),
         legend.position = "bottom")
+```
+
+```{r}
+shallow_commun <- sym_commun_species %>%
+  filter(site == "two_trees" | site == "penis_reef" | site == "lumber_cut_cervicornis")
+
+ggplot(shallow_commun, aes(x = Sample.Name, y = value, fill = sym)) +
+  geom_bar(stat = "identity", position = "fill") +
+  xlab("Sample") +
+  ylab("Proportion of Symbionts in Coral") +
+  labs(fill = "") +
+  facet_grid(genus~site) +
+  scale_fill_manual(values = c( "#7CAE00", "#00BFC4", "#C77CFF", "#F8766D"))
 ```
 
 # Symbiont Compostion by Site
@@ -189,19 +269,15 @@ ggplot(sym_site, aes(x = site, y = value, fill = sym)) +
 
 ```{r}
 coral_spec_dist <- exumas_data %>%
-  select(genus, site) 
+  select(genus) %>%
+  count(genus) %>%
+  mutate(label = paste0("N =", n))
   
-
+ggplot(coral_spec_dist, aes(x = genus, y = n, fill = genus)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(x = genus, y = 2, label = label), inherit.aes = FALSE)
 
 ```
-
-
-
-
-
-
-
-
 
 
 ```{r}
@@ -209,20 +285,9 @@ coral_spec_dist <- exumas_data %>%
 x <- exumas_data %>%
   select(site, depth)
  
-ggplot(x, aes(x = depth, y = site, fill = site)) +
-  geom_density() +
-  geom_violin()
+ggplot(x, aes(x = site, y = -(depth), fill = site)) +
+  geom_boxplot()
+  
 
-
-
-  theme_ridges() + 
-  theme(legend.position = "none")
-
-exumas %>%
-  ggplot(aes(x = Sample.Name, y = depth, color = site)) +
-  geom_point()
-
-library("ggridges")
-library("ggplot2")
 ```
 
