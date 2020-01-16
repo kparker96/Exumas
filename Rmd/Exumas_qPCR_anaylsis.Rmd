@@ -225,7 +225,7 @@ ggplot(sym_commun, aes(x = Sample.Name, y = value, fill = sym)) +
 ```
 
 
-# 
+# Depth of Dominant Symbiont all Data together 
 ```{r}
 dom_sym <- exumas_data %>%
   select(Sample.Name, depth, dom_sym, site) %>%
@@ -246,6 +246,7 @@ ggplot(dom_sym, aes(x = as.factor(depth_int), y = ncol, fill = dom_sym)) +
   
 ```
 
+# Depth and Dominant Symbiont by Genus
 ```{r}
 dom_sym_species <- exumas_data %>%
   select(Sample.Name, depth, dom_sym, genus) %>%
@@ -258,8 +259,224 @@ dom_sym_species <- exumas_data %>%
 
 ggplot(dom_sym_species, aes(x = as.factor(depth_int), y = ncol, fill = dom_sym)) +
   geom_bar(stat = "identity", position = "fill", size =20) +
-  geom_text(aes(x = as.factor(depth_int), y = 1.05, label =label), inherit.aes = FALSE) +
+  geom_text(aes(x = as.factor(depth_int), y = 1.05, label = label), inherit.aes = FALSE) +
   facet_grid(~genus) +
   scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c'))
 ```
 
+#Diploria Network Figure 
+```{r}
+library(igraph) #install.packages("igraph")
+library(fields)
+
+net_data_dip <- exumas_data %>%
+  select(Sample.Name, genus, 
+         Symbiodinium = A.prop, Breviolum = B.prop, 
+         Cladocopium = C.prop, Durusdinium = D.prop, depth) %>%
+  filter(genus == "diploria", depth != "NA") %>%
+  select(Sample.Name, Symbiodinium, Breviolum, Cladocopium, Durusdinium)
+
+edges_dip <- net_data_dip %>%
+  gather(key = "Genera", value = "weight", -Sample.Name) %>%
+  filter(weight != 0)
+
+depth_dip <- exumas_data %>%
+  select(Sample.Name, depth, genus) %>%
+  filter(genus == "diploria", depth != "NA") %>%
+  select(Sample.Name, depth)
+
+verts_dip <- tibble(Sample.Name = c(net_data_dip$Sample.Name, colnames(net_data_dip)[-1])) %>%
+  left_join(depth_dip) %>%
+  rename(id = Sample.Name) %>%
+  mutate(lab = case_when(grepl("EX", id) ~ "", grepl("um", id) ~ str_sub(id, start = 1, end = 1))) %>%
+  select(id, depth, lab)
+
+net_dip <- graph_from_data_frame(edges_dip, directed = FALSE, vertices = verts_dip)
+
+png("Figures/dip_Network.png", width = 200, height = 200, units = "mm", res = 600)
+
+set.seed(6)
+
+plot(net_dip, edge.curved = 0, 
+     edge.width = 15 * (E(net_dip)$weight)^0.5, 
+     edge.color = "gray65",
+     vertex.label = V(net_dip)$lab,
+     vertex.label.font = 2,
+     vertex.label.cex = 2.5,
+     vertex.label.color = "black", 
+     vertex.size = ifelse(grepl("EX", names(V(net_dip))), 10, 25),
+     vertex.color = ifelse(grepl("EX", names(V(net_dip))), 
+                           colorRampPalette(c("white", "black"))(100)[as.numeric(cut(V(net_dip)$depth,breaks = 100))],
+                           c('#a6cee3','#1f78b4','#b2df8a','#33a02c')))
+
+image.plot(legend.only = TRUE, 
+           zlim = range(V(net_dip)$depth, na.rm = TRUE),
+           horizontal = TRUE,
+           legend.shrink = 0.6,
+           legend.lab = "Depth (m)",
+           col = colorRampPalette(c("white", "black"))(100))
+
+
+dev.off()
+```
+
+# Orbicella Network Figure 
+```{r}
+net_data_orb <- exumas_data %>%
+  select(Sample.Name, genus, 
+         Symbiodinium = A.prop, Breviolum = B.prop, 
+         Cladocopium = C.prop, Durusdinium = D.prop, depth) %>%
+  filter(genus == "orbicella", depth != "NA") %>%
+  select(Sample.Name, Symbiodinium, Breviolum, Cladocopium, Durusdinium)
+
+edges_orb <- net_data_orb %>%
+  gather(key = "Genera", value = "weight", -Sample.Name) %>%
+  filter(weight != 0)
+
+depth_orb <- exumas_data %>%
+  select(Sample.Name, depth, genus) %>%
+  filter(genus == "orbicella", depth != "NA") %>%
+  select(Sample.Name, depth)
+
+verts_orb <- tibble(Sample.Name = c(net_data_orb$Sample.Name, colnames(net_data_orb)[-1])) %>%
+  left_join(depth_orb) %>%
+  rename(id = Sample.Name) %>%
+  mutate(lab = case_when(grepl("EX", id) ~ "", grepl("um", id) ~ str_sub(id, start = 1, end = 1))) %>%
+  select(id, depth, lab)
+
+net_orb <- graph_from_data_frame(edges_orb, directed = FALSE, vertices = verts_orb)
+
+png("Figures/orb_Network.png", width = 200, height = 200, units = "mm", res = 600)
+
+set.seed(6)
+
+plot(net_orb, edge.curved = 0, 
+     edge.width = 15 * (E(net_orb)$weight)^0.5, 
+     edge.color = "gray65",
+     vertex.label = V(net_orb)$lab,
+     vertex.label.font = 2,
+     vertex.label.cex = 2.5,
+     vertex.label.color = "black", 
+     vertex.size = ifelse(grepl("EX", names(V(net_orb))), 10, 25),
+     vertex.color = ifelse(grepl("EX", names(V(net_orb))), 
+                           colorRampPalette(c("white", "black"))(100)[as.numeric(cut(V(net_orb)$depth,breaks = 100))],
+                           c('#a6cee3','#1f78b4','#b2df8a','#33a02c')))
+
+image.plot(legend.only = TRUE, 
+           zlim = range(V(net_orb)$depth, na.rm = TRUE),
+           horizontal = TRUE,
+           legend.shrink = 0.6,
+           legend.lab = "Depth (m)",
+           col = colorRampPalette(c("white", "black"))(100))
+
+
+dev.off()
+```
+
+#Pseudodiploria Network
+```{r}
+
+net_data_pse <- exumas_data %>%
+  select(Sample.Name, genus, 
+         Symbiodinium = A.prop, Breviolum = B.prop, 
+         Cladocopium = C.prop, Durusdinium = D.prop, depth) %>%
+  filter(genus == "pseudodiploria", depth != "NA") %>%
+  select(Sample.Name, Symbiodinium, Breviolum, Cladocopium, Durusdinium)
+
+edges_pse <- net_data_pse %>%
+  gather(key = "Genera", value = "weight", -Sample.Name) %>%
+  filter(weight != 0)
+
+depth_pse <- exumas_data %>%
+  select(Sample.Name, depth, genus) %>%
+  filter(genus == "pseudodiploria", depth != "NA") %>%
+  select(Sample.Name, depth)
+
+verts_pse <- tibble(Sample.Name = c(net_data_pse$Sample.Name, colnames(net_data_pse)[-1])) %>%
+  left_join(depth_pse) %>%
+  rename(id = Sample.Name) %>%
+  mutate(lab = case_when(grepl("EX", id) ~ "", grepl("um", id) ~ str_sub(id, start = 1, end = 1))) %>%
+  select(id, depth, lab)
+
+net_pse <- graph_from_data_frame(edges_pse, directed = FALSE, vertices = verts_pse)
+
+png("Figures/pse_Network.png", width = 200, height = 200, units = "mm", res = 600)
+
+set.seed(6)
+
+plot(net_pse, edge.curved = 0, 
+     edge.width = 15 * (E(net_pse)$weight)^0.5, 
+     edge.color = "gray65",
+     vertex.label = V(net_pse)$lab,
+     vertex.label.font = 2,
+     vertex.label.cex = 2.5,
+     vertex.label.color = "black", 
+     vertex.size = ifelse(grepl("EX", names(V(net_pse))), 10, 25),
+     vertex.color = ifelse(grepl("EX", names(V(net_pse))), 
+                           colorRampPalette(c("white", "black"))(100)[as.numeric(cut(V(net_pse)$depth,breaks = 100))],
+                           c('#a6cee3','#1f78b4','#b2df8a','#33a02c')))
+
+image.plot(legend.only = TRUE, 
+           zlim = range(V(net_pse)$depth, na.rm = TRUE),
+           horizontal = TRUE,
+           legend.shrink = 0.6,
+           legend.lab = "Depth (m)",
+           col = colorRampPalette(c("white", "black"))(100))
+
+
+dev.off()
+```
+
+#Siderastrea Network 
+```{r}
+
+net_data_sid <- exumas_data %>%
+  select(Sample.Name, genus, 
+         Symbiodinium = A.prop, Breviolum = B.prop, 
+         Cladocopium = C.prop, Durusdinium = D.prop, depth) %>%
+  filter(genus == "siderastrea", depth != "NA") %>%
+  select(Sample.Name, Symbiodinium, Breviolum, Cladocopium, Durusdinium)
+
+edges_sid <- net_data_sid %>%
+  gather(key = "Genera", value = "weight", -Sample.Name) %>%
+  filter(weight != 0)
+
+depth_sid <- exumas_data %>%
+  select(Sample.Name, depth, genus) %>%
+  filter(genus == "siderastrea", depth != "NA") %>%
+  select(Sample.Name, depth)
+
+verts_sid <- tibble(Sample.Name = c(net_data_sid$Sample.Name, colnames(net_data_sid)[-1])) %>%
+  left_join(depth_sid) %>%
+  rename(id = Sample.Name) %>%
+  mutate(lab = case_when(grepl("EX", id) ~ "", grepl("um", id) ~ str_sub(id, start = 1, end = 1))) %>%
+  select(id, depth, lab)
+
+net_sid <- graph_from_data_frame(edges_sid, directed = FALSE, vertices = verts_sid)
+
+png("Figures/sid_Network.png", width = 200, height = 200, units = "mm", res = 600)
+
+set.seed(8)
+
+plot(net_sid, edge.curved = 0, 
+     edge.width = 15 * (E(net_sid)$weight)^0.5, 
+     edge.color = "gray65",
+     vertex.label = V(net_sid)$lab,
+     vertex.label.font = 2,
+     vertex.label.cex = 2.5,
+     vertex.label.color = "black", 
+     vertex.size = ifelse(grepl("EX", names(V(net_sid))), 10, 25),
+     vertex.color = ifelse(grepl("EX", names(V(net_sid))), 
+                           colorRampPalette(c("white", "black"))(100)[as.numeric(cut(V(net_sid)$depth,breaks = 100))],
+                           c('#a6cee3','#1f78b4','#b2df8a','#33a02c')))
+
+image.plot(legend.only = TRUE, 
+           zlim = range(V(net_sid)$depth, na.rm = TRUE),
+           horizontal = TRUE,
+           legend.shrink = 0.6,
+           legend.lab = "Depth (m)",
+           col = colorRampPalette(c("white", "black"))(100))
+
+
+dev.off()
+```
