@@ -112,7 +112,6 @@ exumas_dupes_f1 <- exumas_dupes %>%
 exumas_dupes_f2 <- exumas_dupes_f1 %>%
   rowwise() %>%
   mutate(avg_sd = mean(c(A.CT.sd, B.CT.sd, C.CT.sd, D.CT.sd), na.rm = TRUE)) %>%
-  select(Sample.Name, File.Name, A.CT.sd, B.CT.sd, C.CT.sd, D.CT.sd, avg_sd) %>%
   group_by(Sample.Name) %>%
   dplyr::filter(avg_sd == min(avg_sd)) 
 
@@ -153,20 +152,21 @@ sample_data <- raw_sample_data %>%
 
 # Joining sample data with qpcr data and removing NA samples
 exumas_data <- right_join(sample_data, exumas_good, by = "Sample.Name", all = TRUE)
-
 ```
 
-
-# Depth 
+# Distribution of Samples
 ```{r}
-a <- exumas_data %>%
-  select(site, depth) %>%
-  arrange(depth) %>%
-  filter(site == "blacktip_wall")
+species_count <- exumas_data %>%
+  select(Sample.Name, site, genus, depth) %>%
+  group_by(genus) %>%
+  count(vars = "genus") 
 
+site_count <- exumas_data %>%
+  select(Sample.Name, site, species, depth) %>%
+  group_by(site) %>%
+  count(vars = "site")
 
-
-metrics<- a %>%
+depth_metrics<- exumas_data %>%
   group_by(site) %>%
   summarize(
     mean = mean(depth, na.rm = TRUE),
@@ -174,47 +174,45 @@ metrics<- a %>%
     max = max(depth, na.rm = TRUE),
     median = median(depth, na.rm = TRUE))
 
-  arrange(metrics, min)
 
-
-
-b <- a %>%
-  mutate(depth_int = cut(depth, breaks = 13.1)) %>%
-  select(site,depth_int) %>%
-  distinct() %>%
-  arrange(depth_int)
-
-
-c <- a %>%
-  filter(depth > 17.500 & depth < 26.500)
+# Visualizing differences in depth
+depth_dist <- exumas_data %>%
+  select(site, depth) %>%
+  ggplot(aes(x = site, y = -(depth), fill = site)) +
+  geom_boxplot()
+  
 ```
 
-
-
-
-
-
-
-
+#Symbiont Composition per Sample
 ```{r}
-# Visualizing symbiont communites by site and species
-sym_commun_site <- exumas_data %>%
-  select(Sample.Name, A.N, B.N, C.N, D.N, site, genus, dom_sym) %>%
-  mutate(Symbiodinium = case_when(A.N > 0 ~ A.N),
-         Breviolum = case_when(B.N > 0 ~ B.N),
-         Cladocopium = case_when(C.N > 0 ~ C.N),
-         Durusdinium = case_when(D.N > 0 ~ D.N)) %>%
-  select(Sample.Name, Symbiodinium, Breviolum, Cladocopium, Durusdinium, genus, site) %>%
-  gather(key = "sym", value = "value", -Sample.Name, -site, -genus) %>%
-  filter(value != "NA")
+sym_commun <- exumas_data %>%
+  select(Sample.Name, A.prop, B.prop, C.prop, D.prop, depth, site, genus) %>%
+  mutate(Symbiodinium = case_when(A.prop > 0 ~ A.prop),
+         Breviolum = case_when(B.prop > 0 ~ B.prop),
+         Cladocopium = case_when(C.prop > 0 ~ C.prop),
+         Durusdinium = case_when(D.prop > 0 ~ D.prop)) %>%
+  select(Sample.Name, Symbiodinium, Breviolum, Cladocopium, Durusdinium, depth, site, genus) %>%
+  gather(key = "sym", value = "value", -Sample.Name, -depth, -site, -genus)
 
-ggplot(sym_commun_site, aes(x = Sample.Name, y = value, fill = sym)) +
+sym_commun_depth <- sym_commun %>%
+  filter(depth != "NA") %>%
+  mutate(value = ifelse(is.na(value), 0, value))%>%
+  mutate(newcol = paste(depth, Sample.Name))
+
+# Symbiont Comp All Samples by Increasing Depth 
+# ~5 Samples not represented bc no associated depth recorded
+ggplot(sym_commun_depth, aes(x = newcol, y = value, fill = sym)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c'))
+
+# Symbiont Comp by Species and Site 
+ggplot(sym_commun, aes(x = Sample.Name, y = value, fill = sym)) +
   geom_bar(stat = "identity", position = "fill") +
   xlab("Sample") +
   ylab("Proportion of Symbionts in Coral") +
   labs(fill = "") +
   facet_grid(genus~site) +
-  scale_fill_manual(values = c( "#7CAE00", "#00BFC4", "#C77CFF", "#F8766D")) +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c')) +
   theme_minimal() +
   theme(axis.title.x = element_text(size = 25),
         axis.title.y = element_text(size = 25),
@@ -226,68 +224,42 @@ ggplot(sym_commun_site, aes(x = Sample.Name, y = value, fill = sym)) +
         legend.position = "bottom")
 ```
 
+
+# 
 ```{r}
-shallow_commun <- sym_commun_species %>%
-  filter(site == "two_trees" | site == "penis_reef" | site == "lumber_cut_cervicornis")
+dom_sym <- exumas_data %>%
+  select(Sample.Name, depth, dom_sym, site) %>%
+  filter(depth != "NA") %>%
+  mutate(depth_int = cut(depth, breaks = 6)) %>%
+  group_by(depth_int, dom_sym, site) %>%
+  summarise(ncol = n()) %>%
+  mutate(n = sum(ncol), label = paste0("N =", n)) %>%
+  mutate(prop = ncol/n)
 
-ggplot(shallow_commun, aes(x = Sample.Name, y = value, fill = sym)) +
-  geom_bar(stat = "identity", position = "fill") +
-  xlab("Sample") +
-  ylab("Proportion of Symbionts in Coral") +
-  labs(fill = "") +
-  facet_grid(genus~site) +
-  scale_fill_manual(values = c( "#7CAE00", "#00BFC4", "#C77CFF", "#F8766D"))
-```
 
-# Symbiont Compostion by Site
-```{r}
-sym_site <- exumas_dom_sym %>%
-  select(A.N, B.N, C.N, D.N, site, genus, dom_sym) %>%
-  mutate(Symbiodinium = case_when(A.N > 0 ~ A.N),
-         Breviolum = case_when(B.N > 0 ~ B.N),
-         Cladocopium = case_when(C.N > 0 ~ C.N),
-         Durusdinium = case_when(D.N > 0 ~ D.N)) %>%
-  select(Symbiodinium, Breviolum, Cladocopium, Durusdinium, site) %>%
-  gather(key = "sym", value = "value", -site) %>%
-  filter(value != "NA")
+ggplot(dom_sym, aes(x = as.factor(depth_int), y = ncol, fill = dom_sym)) +
+  geom_bar(stat = "identity", position = "fill", size =20) +
+  geom_text(aes(x = as.factor(depth_int), y = 1.05, label =label), inherit.aes = FALSE) +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c'))
 
-ggplot(sym_site, aes(x = site, y = value, fill = sym)) +
-  geom_bar(stat = "identity", position = "fill") +
-  scale_fill_manual(values = c("#7CAE00", "#00BFC4", "#C77CFF", "#F8766D")) +
-  theme_minimal() +
-  theme(axis.title.x = element_text(size = 25),
-        axis.title.y = element_text(size = 25),
-        axis.text.x = element_text(size = 10, color = "black", margin = margin(t = -20)),
-        axis.text.y = element_text(size = 25, color = "black", margin = margin(l = 30)),
-        panel.background = element_rect(color ="black"),
-        panel.border = element_rect(color = "black", fill = NA, size = 1.5),
-        legend.text = element_text(size = 25, face = "italic"),
-        legend.position = "bottom")
-```
 
-# Distribution of Coral Species across sites 
-
-```{r}
-coral_spec_dist <- exumas_data %>%
-  select(genus) %>%
-  count(genus) %>%
-  mutate(label = paste0("N =", n))
   
-ggplot(coral_spec_dist, aes(x = genus, y = n, fill = genus)) +
-  geom_bar(stat = "identity") +
-  geom_text(aes(x = genus, y = 2, label = label), inherit.aes = FALSE)
-
 ```
 
-
 ```{r}
-# Visualizing differences in depth
-x <- exumas_data %>%
-  select(site, depth)
- 
-ggplot(x, aes(x = site, y = -(depth), fill = site)) +
-  geom_boxplot()
-  
+dom_sym_species <- exumas_data %>%
+  select(Sample.Name, depth, dom_sym, genus) %>%
+  filter(depth != "NA") %>%
+  mutate(depth_int = cut(depth, breaks = 6)) %>%
+  group_by(depth_int, dom_sym, genus) %>%
+  summarise(ncol = n()) %>%
+  mutate(n = sum(ncol), label = paste0("N =", n)) %>%
+  mutate(prop = ncol/n)
 
+ggplot(dom_sym_species, aes(x = as.factor(depth_int), y = ncol, fill = dom_sym)) +
+  geom_bar(stat = "identity", position = "fill", size =20) +
+  geom_text(aes(x = as.factor(depth_int), y = 1.05, label =label), inherit.aes = FALSE) +
+  facet_grid(~genus) +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c'))
 ```
 
