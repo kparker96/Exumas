@@ -480,3 +480,12 @@ image.plot(legend.only = TRUE,
 
 dev.off()
 ```
+
+
+# March Trip Inside ECLSP
+```{r}
+eclsp <- exumas_data %>%
+  filter(site == "shark_reef"| site == "danger_reef") %>%
+  select(Sample.Name, site, genus, species, A.prop, B.prop, C.prop, D.prop, dom_sym)
+```
+
