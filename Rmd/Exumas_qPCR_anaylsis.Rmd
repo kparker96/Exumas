@@ -137,7 +137,7 @@ need_2_clean <- exumas_good %>%
 setdiff(exumas_dupes$Sample.Name, exumas_dupes_f2$Sample.Name)
 
 # Samples that need to be rerun
-view(setdiff(reruns$Sample.Name, exumas_dupes_f2$Sample.Name))
+# view(setdiff(reruns$Sample.Name, exumas_dupes_f2$Sample.Name))
 ```
 
 ```{r}
@@ -148,7 +148,7 @@ raw_sample_data <- readxl::read_xlsx("Data/Sample_data/Ex_Sample_Data.xlsx")
 
 #renaming  colomns of sample data to match qpcr data
 sample_data <- raw_sample_data %>%
-  select(Sample.Name = sample_id, site, genus, species, depth = colony_depth_m)
+  select(Sample.Name = sample_id, site, genus, species, depth = colony_depth_m, range)
 
 # Joining sample data with qpcr data and removing NA samples
 exumas_data <- right_join(sample_data, exumas_good, by = "Sample.Name", all = TRUE)
@@ -176,7 +176,7 @@ depth_metrics<- exumas_data %>%
 
 
 # Visualizing differences in depth
-depth_dist <- exumas_data %>%
+exumas_data %>%
   select(site, depth) %>%
   ggplot(aes(x = site, y = -(depth), fill = site)) +
   geom_boxplot()
@@ -186,7 +186,7 @@ depth_dist <- exumas_data %>%
 #Symbiont Composition per Sample
 ```{r}
 sym_commun <- exumas_data %>%
-  select(Sample.Name, A.prop, B.prop, C.prop, D.prop, depth, site, genus) %>%
+  select(Sample.Name, A.prop, B.prop, C.prop, D.prop, depth, site, genus, range) %>%
   mutate(Symbiodinium = case_when(A.prop > 0 ~ A.prop),
          Breviolum = case_when(B.prop > 0 ~ B.prop),
          Cladocopium = case_when(C.prop > 0 ~ C.prop),
@@ -194,7 +194,7 @@ sym_commun <- exumas_data %>%
   select(Sample.Name, Symbiodinium, Breviolum, Cladocopium, Durusdinium, depth, site, genus) %>%
   gather(key = "sym", value = "value", -Sample.Name, -depth, -site, -genus)
 
-sym_commun_depth <- sym_commun %>%
+sym_commun_depth <-sym_commun %>%
   filter(depth != "NA") %>%
   mutate(value = ifelse(is.na(value), 0, value))%>%
   mutate(newcol = paste(depth, Sample.Name))
@@ -223,6 +223,103 @@ ggplot(sym_commun, aes(x = Sample.Name, y = value, fill = sym)) +
         legend.text = element_text(size = 25, face = "italic"),
         legend.position = "bottom")
 ```
+
+#Symbiont Composition of Each Sample Grouped by Species
+```{r}
+# Siderastrea
+sid_samples <- sym_commun_depth %>%
+  filter(genus == "siderastrea")
+
+sid <- ggplot(sid_samples, aes(x = newcol, y = value, fill = sym)) +
+  geom_bar(stat = "identity", position = "fill") +
+  facet_wrap(~genus) +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c')) +
+  theme_bw() +
+  theme(axis.text.x = element_text(color = "transparent"),
+        axis.title.x = element_text(color = "transparent"),
+        legend.position = "none")
+
+# Orbicella 
+orb_samples <- sym_commun_depth %>%
+  filter(genus == "orbicella")
+
+orb <- ggplot(orb_samples, aes(x = newcol, y = value, fill = sym)) +
+  geom_bar(stat = "identity", position = "fill") +
+  facet_wrap(~genus) +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c')) +
+  theme_bw() +
+  theme(axis.text.x = element_text(color = "transparent"),
+        axis.title.x = element_text(color = "transparent"),
+        legend.position = "none")
+
+# Diploria
+dip_samples <- sym_commun_depth %>%
+  filter(genus == "diploria")
+
+dip <- ggplot(dip_samples, aes(x = newcol, y = value, fill = sym)) +
+  geom_bar(stat = "identity", position = "fill") +
+  facet_wrap(~genus) +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c')) +
+  theme_bw() +
+  theme(axis.text.x = element_text(color = "transparent"),
+        axis.title.x = element_text(color = "transparent"),
+        legend.position = "none")
+
+#Pseudodiploria
+pse_samples <- sym_commun_depth %>%
+  filter(genus == "pseudodiploria")
+
+pse <- ggplot(pse_samples, aes(x = newcol, y = value, fill = sym)) +
+  geom_bar(stat = "identity", position = "fill") +
+  facet_wrap(~genus) +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_fill_manual(values = c('#a6cee3','#1f78b4','#b2df8a','#33a02c')) +
+  theme_bw() +
+  theme(axis.text.x = element_text(color = "transparent"),
+        axis.title.x = element_text(color = "transparent"),
+        legend.position = "none")
+```
+
+# Symbiont Composition Each Sample by Species Grid 
+```{r}
+library(ggpubr) #instal.packages("ggpubr")
+
+ggarrange(sid, orb, dip, pse, 
+                    labels = c("  a", "  b","  c","  d" )) +
+  theme(legend.position = "bottom")
+```
+
+#Symbiont Composition of Each Sample Grouped by Species and Depth Range
+
+```{r}
+
+ranges <- sym_commun %>%
+  filter(depth != "NA") 
+
+
+  mutate(value = ifelse(is.na(value), 0, value))%>%
+  mutate(newcol = paste(depth, Sample.Name))
+ 
+  sym_commun_depth <- sym_renamed %>%
+  filter(depth != "NA") %>%
+  mutate(value = ifelse(is.na(value), 0, value))%>%
+  mutate(newcol = paste(depth, Sample.Name))
+  
+  
+  
+   filter(range == "shallow") %>%
+  select(Sample.Name, genus, range, Symbiodinium, Breviolum, Cladocopium, Durusdinium)
+ 
+
+```
+
+
+
+
+
 
 
 # Depth of Dominant Symbiont all Data together 
@@ -456,7 +553,7 @@ net_sid <- graph_from_data_frame(edges_sid, directed = FALSE, vertices = verts_s
 
 png("Figures/sid_Network.png", width = 200, height = 200, units = "mm", res = 600)
 
-set.seed(8)
+set.seed(10)
 
 plot(net_sid, edge.curved = 0, 
      edge.width = 15 * (E(net_sid)$weight)^0.5, 
@@ -480,12 +577,3 @@ image.plot(legend.only = TRUE,
 
 dev.off()
 ```
-
-
-# March Trip Inside ECLSP
-```{r}
-eclsp <- exumas_data %>%
-  filter(site == "shark_reef"| site == "danger_reef") %>%
-  select(Sample.Name, site, genus, species, A.prop, B.prop, C.prop, D.prop, dom_sym)
-```
-
