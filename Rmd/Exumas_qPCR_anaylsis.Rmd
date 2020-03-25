@@ -280,7 +280,7 @@ pse <- ggplot(pse_samples, aes(x = newcol, y = value, fill = sym)) +
   theme_bw() +
   theme(axis.text.x = element_text(color = "transparent"),
         axis.title.x = element_text(color = "transparent"),
-        legend.position = "none")
+        legend.position = "bottom")
 ```
 
 # Symbiont Composition Each Sample by Species Grid 
